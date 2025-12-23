@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-
 class Patient extends Model
 {
     use HasFactory, SoftDeletes;
@@ -16,7 +15,7 @@ class Patient extends Model
         'date_of_birth', 'gender', 'blood_group', 'address', 'city',
         'state', 'zip_code', 'emergency_contact_name', 'emergency_contact_phone',
         'emergency_contact_relation', 'medical_history', 'allergies',
-        'insurance_provider', 'insurance_policy_number', 'is_active'
+        'insurance_provider', 'insurance_policy_number', 'is_active',
     ];
 
     protected $casts = [
@@ -57,6 +56,21 @@ class Patient extends Model
     public function payments()
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function insuranceVerifications()
+    {
+        return $this->hasMany(AfyalinkInsuranceVerification::class);
+    }
+
+    public function preauthorizations()
+    {
+        return $this->hasMany(AfyalinkPreauthorization::class);
+    }
+
+    public function claims()
+    {
+        return $this->hasMany(AfyalinkClaim::class);
     }
 
     public function ambulanceTrips()

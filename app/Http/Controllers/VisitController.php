@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Visit;
-use App\Models\Patient;
-use App\Models\Doctor;
 use App\Models\Appointment;
+use App\Models\Doctor;
+use App\Models\Patient;
+use App\Models\Visit;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -13,17 +13,17 @@ class VisitController extends Controller
 {
     public function index()
     {
-        return Inertia::render('visits/index', [
-            'visits' => Visit::with(['patient','doctor'])->latest()->paginate(20)
+        return Inertia::render('visits/Index', [
+            'visits' => Visit::with(['patient', 'doctor'])->latest()->paginate(20),
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('visits/create', [
-            'patients' => Patient::select('id','first_name','last_name')->get(),
-            'doctors' => Doctor::select('id','first_name','last_name')->get(),
-            'appointments' => Appointment::select('id','appointment_date')->get(),
+        return Inertia::render('visits/Create', [
+            'patients' => Patient::select('id', 'first_name', 'last_name')->get(),
+            'doctors' => Doctor::select('id', 'first_name', 'last_name')->get(),
+            'appointments' => Appointment::select('id', 'appointment_date')->get(),
         ]);
     }
 
@@ -46,18 +46,18 @@ class VisitController extends Controller
 
     public function show(Visit $visit)
     {
-        return Inertia::render('visits/show', [
-            'visit' => $visit->load(['patient','doctor','appointment'])
+        return Inertia::render('Visits/Show', [
+            'visit' => $visit->load(['patient', 'doctor', 'appointment']),
         ]);
     }
 
     public function edit(Visit $visit)
     {
-        return Inertia::render('visits/edit', [
+        return Inertia::render('visits/Edit', [
             'visit' => $visit,
-            'patients' => Patient::select('id','first_name','last_name')->get(),
-            'doctors' => Doctor::select('id','first_name','last_name')->get(),
-            'appointments' => Appointment::select('id','appointment_date')->get(),
+            'patients' => Patient::select('id', 'first_name', 'last_name')->get(),
+            'doctors' => Doctor::select('id', 'first_name', 'last_name')->get(),
+            'appointments' => Appointment::select('id', 'appointment_date')->get(),
         ]);
     }
 
@@ -78,6 +78,7 @@ class VisitController extends Controller
     public function destroy(Visit $visit)
     {
         $visit->delete();
+
         return back()->with('success', 'Visit deleted');
     }
 }

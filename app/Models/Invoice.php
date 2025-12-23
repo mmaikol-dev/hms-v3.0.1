@@ -35,6 +35,11 @@ class Invoice extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function claim()
+    {
+        return $this->hasOne(AfyalinkClaim::class);
+    }
+
     public function getBalanceAttribute()
     {
         return $this->total_amount - $this->paid_amount;

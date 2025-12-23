@@ -28,6 +28,23 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'afyalink' => [
+        'base_url' => env('AFYALINK_BASE_URL', 'https://uat.dha.go.ke'),
+
+        // Token auth
+        'api_key' => env('AFYALINK_API_KEY'),
+        'api_secret' => env('AFYALINK_API_SECRET'),
+        'agent' => env('AFYALINK_AGENT'),
+
+        // Basic auth (optional fallback)
+        'username' => env('AFYALINK_USERNAME'),
+        'password' => env('AFYALINK_PASSWORD'),
+
+        'facility_code' => env('AFYALINK_FACILITY_CODE'),
+        'timeout' => 30,
+        'mock' => false,
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\AdmissionController;
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\BedController;
+use App\Http\Controllers\BillController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\InventoryItemController;
@@ -14,7 +16,9 @@ use App\Http\Controllers\MedicineController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PrescriptionController;
+use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\VisitController;
 use App\Http\Controllers\WardController;
 use App\Models\Appointment;
 use App\Models\Bed;
