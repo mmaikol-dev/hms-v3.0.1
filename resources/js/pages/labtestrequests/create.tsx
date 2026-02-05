@@ -211,7 +211,7 @@ export default function LabTestRequestCreate() {
                                             {doctors?.map((doctor: any) => (
                                                 <SelectItem
                                                     key={doctor.id}
-                                                    value={doctor.id.toString()}
+                                                    value={doctor.user_id?.toString() || doctor.id.toString()}
                                                 >
                                                     Dr. {doctor.user?.name}
                                                 </SelectItem>

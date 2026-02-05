@@ -8,6 +8,7 @@ use App\Models\LabTestRequest;
 use App\Models\Patient;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class LabTestRequestController extends Controller
@@ -76,11 +77,20 @@ class LabTestRequestController extends Controller
     {
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
-            'doctor_id' => 'required|exists:users,id',
+            'doctor_id' => 'required|integer',
             'lab_test_id' => 'required|exists:lab_tests,id',
             'requested_date' => 'required|date',
             'notes' => 'nullable|string',
         ]);
+
+        // Accept either doctor table ID or direct user ID, then store user ID.
+        $doctorUserId = Doctor::whereKey($validated['doctor_id'])->value('user_id') ?? $validated['doctor_id'];
+        if (! User::whereKey($doctorUserId)->exists()) {
+            throw ValidationException::withMessages([
+                'doctor_id' => 'Selected doctor is invalid.',
+            ]);
+        }
+        $validated['doctor_id'] = $doctorUserId;
 
         // Generate unique request number
         $validated['request_number'] = 'LAB-'.date('Ymd').'-'.str_pad(

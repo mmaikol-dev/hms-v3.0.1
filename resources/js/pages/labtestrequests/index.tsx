@@ -37,7 +37,7 @@ import {
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: "Dashboard", href: "/dashboard" },
-    { title: "Lab Test Requests", href: "/labtest-requests" },
+    { title: "Lab Test Requests", href: "/labtestrequests" },
 ];
 
 const statusOptions = [
@@ -82,7 +82,7 @@ export default function LabTestRequestsIndex() {
 
     const handleSearch = () => {
         router.get(
-            "/labtest-requests",
+            "/labtestrequests",
             { search },
             {
                 preserveState: true,
@@ -101,7 +101,7 @@ export default function LabTestRequestsIndex() {
 
         setProcessing(true);
 
-        router.put(`/labtest-requests/${editingRequest.id}`, editingRequest, {
+        router.put(`/labtestrequests/${editingRequest.id}`, editingRequest, {
             preserveScroll: true,
             onFinish: () => {
                 setProcessing(false);
@@ -127,7 +127,7 @@ export default function LabTestRequestsIndex() {
         setProcessing(true);
 
         router.post(
-            `/labtest-requests/${assigningRequest.id}/assign-technician`,
+            `/labtestrequests/${assigningRequest.id}/assign-technician`,
             { assigned_to: selectedTechnician },
             {
                 preserveScroll: true,
@@ -151,7 +151,7 @@ export default function LabTestRequestsIndex() {
         setProcessing(true);
 
         router.post(
-            `/labtest-requests/${resultRequest.id}/submit-result`,
+            `/labtestrequests/${resultRequest.id}/submit-result`,
             { result: resultText },
             {
                 preserveScroll: true,
@@ -344,7 +344,7 @@ export default function LabTestRequestsIndex() {
                                                     variant="destructive"
                                                     onClick={() =>
                                                         router.delete(
-                                                            `/labtest-requests/${request.id}`
+                                                            `/labtestrequests/${request.id}`
                                                         )
                                                     }
                                                 >
