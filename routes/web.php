@@ -52,7 +52,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'available' => \App\Models\Bed::where('status', 'available')->count(),
             ],
         ]);
-    });
+    })->name('dashboard');
 
     // admissions (web)
     Route::get('/admissions', [AdmissionController::class, 'index'])->name('admissions.index');
@@ -164,7 +164,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('bills', BillController::class);
 
     // invoice
-    Route::resource('invoices', InvoiceController::class);
+   Route::resource('invoices', InvoiceController::class);
+Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
+Route::get('invoices/{invoice}/view', [InvoiceController::class, 'view'])->name('invoices.view');
     Route::resource('invoiceitems', InvoiceItemController::class);
 
     // bed

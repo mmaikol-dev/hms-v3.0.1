@@ -28,8 +28,8 @@ class BillController extends Controller
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
             'amount' => 'required|numeric',
-            'status' => 'nullable|in:unpaid,paid,pending',
-            'description' => 'nullable|string',
+            'payment_method' => 'required|in:Cash,Insurance,Mpesa,Card',
+            'status' => 'nullable|in:Pending,Paid',
         ]);
 
         Bill::create($validated);
@@ -56,8 +56,8 @@ class BillController extends Controller
     {
         $validated = $request->validate([
             'amount' => 'nullable|numeric',
-            'status' => 'nullable|in:unpaid,paid,pending',
-            'description' => 'nullable|string',
+            'payment_method' => 'nullable|in:Cash,Insurance,Mpesa,Card',
+            'status' => 'nullable|in:Pending,Paid',
         ]);
 
         $bill->update($validated);

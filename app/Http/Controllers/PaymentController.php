@@ -22,12 +22,14 @@ class PaymentController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('payment_number', 'like', "%{$search}%")
                     ->orWhereHas('patient', function ($q) use ($search) {
-                        $q->where('name', 'like', "%{$search}%");
+                        $q->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%");
                     })
                     ->orWhereHas('invoice', function ($q) use ($search) {
                         $q->where('invoice_number', 'like', "%{$search}%")
                             ->orWhereHas('patient', function ($q) use ($search) {
-                                $q->where('name', 'like', "%{$search}%");
+                                $q->where('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%");
                             });
                     });
             });
@@ -51,7 +53,7 @@ class PaymentController extends Controller
                 ->sum('amount'),
         ];
 
-        return Inertia::render('Payments/Index', [
+        return Inertia::render('payments/index', [
             'payments' => $payments,
             'stats' => $stats,
             'filters' => $request->only(['search', 'date']),
@@ -62,8 +64,8 @@ class PaymentController extends Controller
     {
         // Get unpaid or partially paid invoices
         $invoices = Invoice::with('patient')
-            ->whereIn('status', ['pending', 'partial'])
-            ->where('balance', '>', 0)
+            ->whereIn('status', ['pending', 'partially_paid'])
+            ->whereRaw('total_amount > paid_amount')
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -72,7 +74,7 @@ class PaymentController extends Controller
             ->orderBy('name')
             ->get();
 
-        return Inertia::render('Payments/Create', [
+        return Inertia::render('payments/create', [
             'invoices' => $invoices,
             'users' => $users,
         ]);
@@ -116,8 +118,7 @@ class PaymentController extends Controller
             $newPaidAmount = $invoice->paid_amount + $validated['amount'];
             $invoice->update([
                 'paid_amount' => $newPaidAmount,
-                'balance' => $invoice->total_amount - $newPaidAmount,
-                'status' => $newPaidAmount >= $invoice->total_amount ? 'paid' : 'partial',
+                'status' => $newPaidAmount >= $invoice->total_amount ? 'paid' : 'partially_paid',
             ]);
 
             DB::commit();
@@ -136,7 +137,7 @@ class PaymentController extends Controller
         $payment = Payment::with(['invoice.patient', 'patient', 'receivedBy'])
             ->findOrFail($id);
 
-        return Inertia::render('Payments/Show', [
+        return Inertia::render('payments/show', [
             'payment' => $payment,
         ]);
     }
@@ -168,8 +169,7 @@ class PaymentController extends Controller
             $newPaidAmount = $invoice->paid_amount - $payment->amount;
             $invoice->update([
                 'paid_amount' => $newPaidAmount,
-                'balance' => $invoice->total_amount - $newPaidAmount,
-                'status' => $newPaidAmount <= 0 ? 'pending' : 'partial',
+                'status' => $newPaidAmount <= 0 ? 'pending' : 'partially_paid',
             ]);
 
             $payment->delete();
@@ -224,7 +224,7 @@ class PaymentController extends Controller
             'payments' => $payments,
         ];
 
-        return Inertia::render('Payments/DailyReport', [
+        return Inertia::render('payments/daily-report', [
             'date' => $date,
             'summary' => $summary,
         ]);

@@ -1,3 +1,6 @@
+import { Form, Head } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
+
 import InputError from '@/components/input-error';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -9,22 +12,85 @@ import AuthLayout from '@/layouts/auth-layout';
 import { register } from '@/routes';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
-import { Form, Head } from '@inertiajs/react';
+import { LayoutDashboard } from 'lucide-react';
 
 interface LoginProps {
     status?: string;
     canResetPassword: boolean;
     canRegister: boolean;
+    auth?: {
+        user?: {
+            id: number;
+            name: string;
+            email: string;
+        };
+    };
 }
 
 export default function Login({
     status,
     canResetPassword,
     canRegister,
+    auth,
 }: LoginProps) {
+    const { props } = usePage();
+
+    // Check if user is authenticated - using the auth prop from Laravel
+    const isAuthenticated = !!auth?.user;
+
+    // If user is already authenticated, show dashboard redirect option
+    if (isAuthenticated) {
+        return (
+            <AuthLayout
+                title="Welcome back!"
+                description="You are already logged in to your account"
+            >
+                <Head title="Already Logged In" />
+
+                <div className="flex flex-col items-center justify-center p-8 text-center">
+                    <div className="mb-6 rounded-full bg-green-100 p-4">
+                        <LayoutDashboard className="h-12 w-12 text-green-600" />
+                    </div>
+
+                    <h2 className="text-2xl font-bold mb-2">Already Logged In</h2>
+                    <p className="text-muted-foreground mb-8">
+                        You are already logged in as <span className="font-semibold">{auth?.user?.name || auth?.user?.email}</span>.
+                        Would you like to go to your dashboard?
+                    </p>
+
+                    <div className="space-y-4 w-full max-w-sm">
+                        <Button
+                            asChild
+                            className="w-full gap-2"
+                            size="lg"
+                        >
+                            <a href="/dashboard">
+                                <LayoutDashboard className="h-5 w-5" />
+                                Go to Dashboard
+                            </a>
+                        </Button>
+
+                        <div className="text-sm text-muted-foreground">
+                            Not you?{' '}
+                            <Form action="/logout" method="POST" className="inline">
+                                <button
+                                    type="submit"
+                                    className="text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                    Log out
+                                </button>
+                            </Form>
+                        </div>
+                    </div>
+                </div>
+            </AuthLayout>
+        );
+    }
+
+    // Normal login form for non-authenticated users
     return (
         <AuthLayout
-            title="Hospital Management System 🏥"
+            title="Log in to your account"
             description="Enter your email and password below to log in"
         >
             <Head title="Log in" />

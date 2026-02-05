@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import AppLayout from "@/layouts/app-layout";
 import { Head, router, usePage } from "@inertiajs/react";
 import { type BreadcrumbItem } from "@/types";
@@ -31,7 +31,15 @@ import {
     TableHead,
     TableCell,
 } from "@/components/ui/table";
-import { Plus, Trash, Loader2, ArrowLeft } from "lucide-react";
+import { Plus, Trash, Loader2, ArrowLeft, Menu } from "lucide-react";
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: "Dashboard", href: "/dashboard" },
@@ -59,12 +67,30 @@ interface InvoiceItem {
 
 export default function CreateInvoice() {
     const { patients } = usePage().props as any;
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const [processing, setProcessing] = useState(false);
+
+    // Format current date and time for datetime-local input
+    const getCurrentDateTime = () => {
+        const now = new Date();
+        // Format to YYYY-MM-DDTHH:mm
+        return now.toISOString().slice(0, 16);
+    };
+
+    // Add 30 days for due date
+    const getDefaultDueDate = () => {
+        const now = new Date();
+        now.setDate(now.getDate() + 30);
+        return now.toISOString().slice(0, 16);
+    };
+
     const [formData, setFormData] = useState({
         patient_id: "",
-        invoice_date: new Date().toISOString().split("T")[0],
-        due_date: "",
+        file_no: "",
+        member_no: "",
+        invoice_date: getCurrentDateTime(),
+        due_date: getDefaultDueDate(),
         tax_amount: "0.00",
         discount_amount: "0.00",
         notes: "",
@@ -79,6 +105,18 @@ export default function CreateInvoice() {
             amount: 0,
         },
     ]);
+
+    // Handle patient selection and auto-populate file_no and member_no
+    const handlePatientChange = (patientId: string) => {
+        const selectedPatient = patients?.find((p: any) => p.id.toString() === patientId);
+
+        setFormData({
+            ...formData,
+            patient_id: patientId,
+            file_no: selectedPatient?.file_no || "",
+            member_no: selectedPatient?.member_no || "",
+        });
+    };
 
     const addItem = () => {
         setItems([
@@ -103,10 +141,13 @@ export default function CreateInvoice() {
         const newItems = [...items];
         newItems[index] = { ...newItems[index], [field]: value };
 
-        // Calculate amount
-        if (field === "quantity" || field === "unit_price") {
-            newItems[index].amount =
-                newItems[index].quantity * newItems[index].unit_price;
+        // Amount is NOT multiplied by quantity - the entered amount IS the total
+        if (field === "unit_price") {
+            newItems[index].amount = parseFloat(value) || 0;
+        }
+        // If quantity changes, amount stays the same (no multiplication)
+        if (field === "quantity") {
+            newItems[index].amount = newItems[index].unit_price;
         }
 
         setItems(newItems);
@@ -126,7 +167,7 @@ export default function CreateInvoice() {
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat("en-US", {
             style: "currency",
-            currency: "USD",
+            currency: "KES",
         }).format(amount);
     };
 
@@ -151,6 +192,7 @@ export default function CreateInvoice() {
 
         setProcessing(true);
 
+        // Format the date-time for backend (convert to MySQL datetime format)
         const payload = {
             ...formData,
             items: items,
@@ -166,13 +208,131 @@ export default function CreateInvoice() {
         });
     };
 
+    // Mobile Summary Sheet
+    const MobileSummarySheet = () => (
+        <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetContent side="bottom" className="h-[85vh] p-0">
+                <SheetHeader className="px-6 pt-6">
+                    <SheetTitle>Invoice Summary</SheetTitle>
+                    <SheetDescription>
+                        Review and create your invoice
+                    </SheetDescription>
+                </SheetHeader>
+                <ScrollArea className="h-[calc(85vh-120px)] px-6">
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-3">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                    Subtotal
+                                </span>
+                                <span className="font-medium">
+                                    {formatCurrency(calculateSubtotal())}
+                                </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                    Tax
+                                </span>
+                                <span className="font-medium">
+                                    {formatCurrency(
+                                        parseFloat(formData.tax_amount) || 0
+                                    )}
+                                </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                    Discount
+                                </span>
+                                <span className="font-medium text-red-600">
+                                    -
+                                    {formatCurrency(
+                                        parseFloat(
+                                            formData.discount_amount
+                                        ) || 0
+                                    )}
+                                </span>
+                            </div>
+                            <div className="border-t pt-3 flex justify-between">
+                                <span className="font-semibold text-lg">
+                                    Total Amount
+                                </span>
+                                <span className="font-bold text-2xl text-primary">
+                                    {formatCurrency(calculateTotal())}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="pt-6 space-y-3">
+                            <Button
+                                type="submit"
+                                className="w-full"
+                                size="lg"
+                                disabled={processing}
+                                onClick={(e) => {
+                                    setIsMobileMenuOpen(false);
+                                    handleSubmit(e);
+                                }}
+                            >
+                                {processing && (
+                                    <Loader2
+                                        className="mr-2 animate-spin"
+                                        size={16}
+                                    />
+                                )}
+                                Create Invoice
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                            >
+                                Continue Editing
+                            </Button>
+                        </div>
+                    </div>
+                </ScrollArea>
+            </SheetContent>
+        </Sheet>
+    );
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Create Invoice" />
 
-            <div className="flex flex-col gap-6 p-4 max-w-6xl mx-auto">
-                {/* HEADER */}
-                <div className="flex items-center gap-4">
+            {/* Mobile Summary Sheet */}
+            <MobileSummarySheet />
+
+            <div className="flex flex-col gap-4 md:gap-6 p-3 md:p-4 max-w-6xl mx-auto">
+                {/* MOBILE HEADER */}
+                <div className="flex items-center justify-between md:hidden">
+                    <div className="flex items-center gap-3">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => router.visit("/invoices")}
+                            className="h-9 w-9"
+                        >
+                            <ArrowLeft size={18} />
+                        </Button>
+                        <div>
+                            <h1 className="text-lg font-semibold">
+                                Create Invoice
+                            </h1>
+                        </div>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="h-9 w-9"
+                    >
+                        <Menu size={18} />
+                    </Button>
+                </div>
+
+                {/* DESKTOP HEADER */}
+                <div className="hidden md:flex items-center gap-4">
                     <Button
                         variant="outline"
                         size="icon"
@@ -190,28 +350,25 @@ export default function CreateInvoice() {
                     </div>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* INVOICE DETAILS */}
+                <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
+                    {/* INVOICE DETAILS - Mobile Stack Layout */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Invoice Information</CardTitle>
-                            <CardDescription>
+                            <CardTitle className="text-lg md:text-xl">
+                                Invoice Information
+                            </CardTitle>
+                            <CardDescription className="text-sm">
                                 Basic invoice details and patient information
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2">
+                        <CardContent className="space-y-4 md:space-y-0 md:grid md:grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="lg:col-span-2">
                                 <Label>Patient *</Label>
                                 <Select
                                     value={formData.patient_id}
-                                    onValueChange={(value) =>
-                                        setFormData({
-                                            ...formData,
-                                            patient_id: value,
-                                        })
-                                    }
+                                    onValueChange={handlePatientChange}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className="w-full">
                                         <SelectValue placeholder="Select Patient" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -220,18 +377,57 @@ export default function CreateInvoice() {
                                                 key={patient.id}
                                                 value={patient.id.toString()}
                                             >
-                                                {patient.name} (ID: {patient.id}
-                                                )
+                                                <span className="truncate">
+                                                    {patient.name} (ID: {patient.id})
+                                                </span>
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            <div>
-                                <Label>Invoice Date *</Label>
+                            <div className="space-y-2">
+                                <Label>File Number</Label>
                                 <Input
-                                    type="date"
+                                    type="text"
+                                    value={formData.file_no}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            file_no: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Auto-filled or enter manually"
+                                    className="w-full"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Auto-populated from patient record
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Member Number</Label>
+                                <Input
+                                    type="text"
+                                    value={formData.member_no}
+                                    onChange={(e) =>
+                                        setFormData({
+                                            ...formData,
+                                            member_no: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Auto-filled or enter manually"
+                                    className="w-full"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Auto-populated from patient record
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Invoice Date & Time *</Label>
+                                <Input
+                                    type="datetime-local"
                                     value={formData.invoice_date}
                                     onChange={(e) =>
                                         setFormData({
@@ -240,13 +436,17 @@ export default function CreateInvoice() {
                                         })
                                     }
                                     required
+                                    className="w-full"
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    Select date and time for invoice creation
+                                </p>
                             </div>
 
-                            <div>
-                                <Label>Due Date *</Label>
+                            <div className="space-y-2">
+                                <Label>Due Date & Time *</Label>
                                 <Input
-                                    type="date"
+                                    type="datetime-local"
                                     value={formData.due_date}
                                     onChange={(e) =>
                                         setFormData({
@@ -256,10 +456,14 @@ export default function CreateInvoice() {
                                     }
                                     min={formData.invoice_date}
                                     required
+                                    className="w-full"
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    Select due date and time
+                                </p>
                             </div>
 
-                            <div>
+                            <div className="space-y-2">
                                 <Label>Tax Amount</Label>
                                 <Input
                                     type="number"
@@ -272,10 +476,11 @@ export default function CreateInvoice() {
                                             tax_amount: e.target.value,
                                         })
                                     }
+                                    className="w-full"
                                 />
                             </div>
 
-                            <div>
+                            <div className="space-y-2">
                                 <Label>Discount Amount</Label>
                                 <Input
                                     type="number"
@@ -288,10 +493,11 @@ export default function CreateInvoice() {
                                             discount_amount: e.target.value,
                                         })
                                     }
+                                    className="w-full"
                                 />
                             </div>
 
-                            <div className="md:col-span-2">
+                            <div className="lg:col-span-2 space-y-2">
                                 <Label>Notes</Label>
                                 <Textarea
                                     value={formData.notes}
@@ -303,18 +509,21 @@ export default function CreateInvoice() {
                                     }
                                     rows={3}
                                     placeholder="Additional notes or instructions..."
+                                    className="resize-none"
                                 />
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* INVOICE ITEMS */}
+                    {/* INVOICE ITEMS - Mobile Card Layout */}
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                                 <div>
-                                    <CardTitle>Invoice Items</CardTitle>
-                                    <CardDescription>
+                                    <CardTitle className="text-lg md:text-xl">
+                                        Invoice Items
+                                    </CardTitle>
+                                    <CardDescription className="text-sm">
                                         Add items or services to this invoice
                                     </CardDescription>
                                 </div>
@@ -323,6 +532,7 @@ export default function CreateInvoice() {
                                     variant="outline"
                                     size="sm"
                                     onClick={addItem}
+                                    className="w-full md:w-auto"
                                 >
                                     <Plus size={16} className="mr-2" />
                                     Add Item
@@ -330,199 +540,257 @@ export default function CreateInvoice() {
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="border rounded-lg overflow-hidden">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="w-[140px]">
-                                                Type
-                                            </TableHead>
-                                            <TableHead>Description</TableHead>
-                                            <TableHead className="w-[100px]">
-                                                Qty
-                                            </TableHead>
-                                            <TableHead className="w-[120px]">
-                                                Unit Price
-                                            </TableHead>
-                                            <TableHead className="w-[120px]">
-                                                Amount
-                                            </TableHead>
-                                            <TableHead className="w-[60px]"></TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {items.map((item, index) => (
-                                            <TableRow key={index}>
-                                                <TableCell>
+                            {/* Mobile Layout */}
+                            <div className="space-y-4 md:hidden">
+                                {items.map((item, index) => (
+                                    <Card key={index} className="relative">
+                                        <CardContent className="pt-6">
+                                            <div className="absolute top-2 right-2">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => removeItem(index)}
+                                                    disabled={items.length === 1}
+                                                    className="h-8 w-8"
+                                                >
+                                                    <Trash size={14} />
+                                                </Button>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Type</Label>
                                                     <Select
                                                         value={item.item_type}
-                                                        onValueChange={(
-                                                            value
-                                                        ) =>
-                                                            updateItem(
-                                                                index,
-                                                                "item_type",
-                                                                value
-                                                            )
+                                                        onValueChange={(value) =>
+                                                            updateItem(index, "item_type", value)
                                                         }
                                                     >
                                                         <SelectTrigger>
                                                             <SelectValue />
                                                         </SelectTrigger>
                                                         <SelectContent>
-                                                            {itemTypes.map(
-                                                                (type) => (
-                                                                    <SelectItem
-                                                                        key={
-                                                                            type
-                                                                        }
-                                                                        value={
-                                                                            type
-                                                                        }
-                                                                    >
-                                                                        {type.replace(
-                                                                            "_",
-                                                                            " "
-                                                                        )}
-                                                                    </SelectItem>
-                                                                )
-                                                            )}
+                                                            {itemTypes.map((type) => (
+                                                                <SelectItem key={type} value={type}>
+                                                                    {type.replace("_", " ")}
+                                                                </SelectItem>
+                                                            ))}
                                                         </SelectContent>
                                                     </Select>
-                                                </TableCell>
-                                                <TableCell>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Description *</Label>
                                                     <Input
-                                                        value={
-                                                            item.description
-                                                        }
+                                                        value={item.description}
                                                         onChange={(e) =>
-                                                            updateItem(
-                                                                index,
-                                                                "description",
-                                                                e.target.value
-                                                            )
+                                                            updateItem(index, "description", e.target.value)
                                                         }
                                                         placeholder="Item description"
                                                         required
                                                     />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        min="1"
-                                                        value={item.quantity}
-                                                        onChange={(e) =>
-                                                            updateItem(
-                                                                index,
-                                                                "quantity",
-                                                                parseInt(
-                                                                    e.target
-                                                                        .value
-                                                                ) || 1
-                                                            )
-                                                        }
-                                                        required
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Input
-                                                        type="number"
-                                                        step="0.01"
-                                                        min="0"
-                                                        value={item.unit_price}
-                                                        onChange={(e) =>
-                                                            updateItem(
-                                                                index,
-                                                                "unit_price",
-                                                                parseFloat(
-                                                                    e.target
-                                                                        .value
-                                                                ) || 0
-                                                            )
-                                                        }
-                                                        required
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="font-medium">
-                                                    {formatCurrency(
-                                                        item.amount
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() =>
-                                                            removeItem(index)
-                                                        }
-                                                        disabled={
-                                                            items.length === 1
-                                                        }
-                                                    >
-                                                        <Trash size={16} />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">Quantity</Label>
+                                                        <Input
+                                                            type="number"
+                                                            min="1"
+                                                            value={item.quantity}
+                                                            onChange={(e) =>
+                                                                updateItem(index, "quantity", parseInt(e.target.value) || 1)
+                                                            }
+                                                            required
+                                                        />
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">Total Amount</Label>
+                                                        <Input
+                                                            type="number"
+                                                            step="0.01"
+                                                            min="0"
+                                                            value={item.unit_price}
+                                                            onChange={(e) =>
+                                                                updateItem(index, "unit_price", parseFloat(e.target.value) || 0)
+                                                            }
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-2 border-t">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm text-muted-foreground">Amount:</span>
+                                                        <span className="font-semibold">
+                                                            {formatCurrency(item.amount)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+
+                            {/* Desktop Layout */}
+                            <div className="hidden md:block">
+                                <div className="border rounded-lg overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead className="w-[140px]">
+                                                        Type
+                                                    </TableHead>
+                                                    <TableHead>Description</TableHead>
+                                                    <TableHead className="w-[100px]">
+                                                        Qty
+                                                    </TableHead>
+                                                    <TableHead className="w-[120px]">
+                                                        Total Amount
+                                                    </TableHead>
+                                                    <TableHead className="w-[120px]">
+                                                        Amount
+                                                    </TableHead>
+                                                    <TableHead className="w-[60px]"></TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {items.map((item, index) => (
+                                                    <TableRow key={index}>
+                                                        <TableCell>
+                                                            <Select
+                                                                value={item.item_type}
+                                                                onValueChange={(value) =>
+                                                                    updateItem(index, "item_type", value)
+                                                                }
+                                                            >
+                                                                <SelectTrigger>
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {itemTypes.map((type) => (
+                                                                        <SelectItem key={type} value={type}>
+                                                                            {type.replace("_", " ")}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Input
+                                                                value={item.description}
+                                                                onChange={(e) =>
+                                                                    updateItem(index, "description", e.target.value)
+                                                                }
+                                                                placeholder="Item description"
+                                                                required
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Input
+                                                                type="number"
+                                                                min="1"
+                                                                value={item.quantity}
+                                                                onChange={(e) =>
+                                                                    updateItem(index, "quantity", parseInt(e.target.value) || 1)
+                                                                }
+                                                                required
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                value={item.unit_price}
+                                                                onChange={(e) =>
+                                                                    updateItem(index, "unit_price", parseFloat(e.target.value) || 0)
+                                                                }
+                                                                required
+                                                            />
+                                                        </TableCell>
+                                                        <TableCell className="font-medium">
+                                                            {formatCurrency(item.amount)}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => removeItem(index)}
+                                                                disabled={items.length === 1}
+                                                            >
+                                                                <Trash size={16} />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* SUMMARY */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Invoice Summary</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-3">
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">
-                                        Subtotal
-                                    </span>
-                                    <span className="font-medium">
-                                        {formatCurrency(calculateSubtotal())}
-                                    </span>
+                    {/* SUMMARY - Desktop Only */}
+                    <div className="hidden md:block">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Invoice Summary</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            Subtotal
+                                        </span>
+                                        <span className="font-medium">
+                                            {formatCurrency(calculateSubtotal())}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            Tax
+                                        </span>
+                                        <span className="font-medium">
+                                            {formatCurrency(
+                                                parseFloat(formData.tax_amount) || 0
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            Discount
+                                        </span>
+                                        <span className="font-medium text-red-600">
+                                            -
+                                            {formatCurrency(
+                                                parseFloat(
+                                                    formData.discount_amount
+                                                ) || 0
+                                            )}
+                                        </span>
+                                    </div>
+                                    <div className="border-t pt-3 flex justify-between">
+                                        <span className="font-semibold text-lg">
+                                            Total Amount
+                                        </span>
+                                        <span className="font-bold text-2xl text-primary">
+                                            {formatCurrency(calculateTotal())}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">
-                                        Tax
-                                    </span>
-                                    <span className="font-medium">
-                                        {formatCurrency(
-                                            parseFloat(formData.tax_amount) || 0
-                                        )}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">
-                                        Discount
-                                    </span>
-                                    <span className="font-medium text-red-600">
-                                        -
-                                        {formatCurrency(
-                                            parseFloat(
-                                                formData.discount_amount
-                                            ) || 0
-                                        )}
-                                    </span>
-                                </div>
-                                <div className="border-t pt-3 flex justify-between">
-                                    <span className="font-semibold text-lg">
-                                        Total Amount
-                                    </span>
-                                    <span className="font-bold text-2xl text-primary">
-                                        {formatCurrency(calculateTotal())}
-                                    </span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
+                    </div>
 
-                    {/* ACTIONS */}
-                    <div className="flex justify-end gap-3">
+                    {/* ACTIONS - Desktop Only */}
+                    <div className="hidden md:flex justify-end gap-3">
                         <Button
                             type="button"
                             variant="outline"
@@ -540,6 +808,44 @@ export default function CreateInvoice() {
                             )}
                             Create Invoice
                         </Button>
+                    </div>
+
+                    {/* MOBILE FLOATING ACTIONS */}
+                    <div className="fixed bottom-4 left-4 right-4 md:hidden">
+                        <div className="bg-background border rounded-lg shadow-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="font-medium">Total:</span>
+                                <span className="font-bold text-lg text-primary">
+                                    {formatCurrency(calculateTotal())}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => router.visit("/invoices")}
+                                    disabled={processing}
+                                    size="sm"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="button"
+                                    disabled={processing}
+                                    size="sm"
+                                    onClick={() => setIsMobileMenuOpen(true)}
+                                >
+                                    {processing ? (
+                                        <>
+                                            <Loader2 className="mr-2 animate-spin" size={14} />
+                                            Creating...
+                                        </>
+                                    ) : (
+                                        "Review & Create"
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>

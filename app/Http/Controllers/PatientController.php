@@ -20,37 +20,56 @@ class PatientController extends Controller
         ]);
     }
 
-    public function store(Request $request)
-    {
-        // dd($request->all());
-        $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'email' => 'nullable|email|unique:patients,email',
-            'phone' => 'required|string|max:20',
-            'date_of_birth' => 'required|date',
-            'gender' => 'required|in:male,female,other',
-            'blood_group' => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'address' => 'required|string',
-            'city' => 'required|string|max:100',
-            'state' => 'required|string|max:100',
-            'zip_code' => 'nullable|string|max:10',
-            'emergency_contact_name' => 'nullable|string|max:255',
-            'emergency_contact_phone' => 'nullable|string|max:20',
-            'emergency_contact_relation' => 'nullable|string|max:100',
-            'medical_history' => 'nullable|string',
-            'allergies' => 'nullable|string',
-            'insurance_provider' => 'nullable|string|max:255',
-            'insurance_policy_number' => 'nullable|string|max:100',
-        ]);
+   public function store(Request $request)
+{
+    $validated = $request->validate([
+        'first_name' => 'required|string|max:255',
+        'last_name' => 'required|string|max:255',
+        'email' => 'nullable|email|unique:patients,email',
+        'phone' => 'required|string|max:20',
+        'date_of_birth' => 'required|date',
+        'gender' => 'required|in:male,female,other',
+        'blood_group' => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
+        'address' => 'required|string',
+        'city' => 'required|string|max:100',
+        'state' => 'required|string|max:100',
+        'zip_code' => 'nullable|string|max:10',
+        'emergency_contact_name' => 'nullable|string|max:255',
+        'emergency_contact_phone' => 'nullable|string|max:20',
+        'emergency_contact_relation' => 'nullable|string|max:100',
+        'medical_history' => 'nullable|string',
+        'allergies' => 'nullable|string',
+        'insurance_provider' => 'nullable|string|max:255',
+        'insurance_policy_number' => 'nullable|string|max:100',
+        'file_no' => 'nullable|string|max:50|unique:patients,file_no',
+    ]);
 
-        // Generate unique patient ID
-        $validated['patient_id'] = 'PAT'.str_pad(Patient::count() + 1, 6, '0', STR_PAD_LEFT);
+    /*
+     |-------------------------------------------------
+     | Generate unique patient_id (safe version)
+     |-------------------------------------------------
+     */
+    $nextId = (Patient::max('id') ?? 0) + 1;
+    $validated['patient_id'] = 'PAT' . str_pad($nextId, 6, '0', STR_PAD_LEFT);
 
-        $patient = Patient::create($validated);
-
-        return response()->json($patient, 201);
+    /*
+     |-------------------------------------------------
+     | Generate file_no automatically if not provided
+     | Format: FILE20260121XXXX
+     |-------------------------------------------------
+     */
+    if (empty($validated['file_no'])) {
+        do {
+            $validated['file_no'] = 'FILE' . now()->format('Ymd') . rand(1000, 9999);
+        } while (Patient::where('file_no', $validated['file_no'])->exists());
     }
+
+    $patient = Patient::create($validated);
+
+    return redirect()->route('patients.index')
+        ->with('success', 'Patient created successfully');
+}
+
 
     public function generateReport(Patient $patient)
     {
@@ -95,20 +114,22 @@ class PatientController extends Controller
     }
 
     public function update(Request $request, $id)
-    {
+{
+    try {
         $patient = Patient::findOrFail($id);
 
         $validated = $request->validate([
-            'first_name' => 'string|max:255',
-            'last_name' => 'string|max:255',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
             'email' => 'nullable|email|unique:patients,email,'.$id,
-            'phone' => 'string|max:20',
-            'date_of_birth' => 'date',
-            'gender' => 'in:male,female,other',
+            'phone' => 'required|string|max:20',
+            'date_of_birth' => 'nullable|date',
+            'gender' => 'required|in:male,female,other',
             'blood_group' => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
-            'address' => 'string',
-            'city' => 'string|max:100',
-            'state' => 'string|max:100',
+            'address' => 'nullable|string',
+            'national_id' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:100',
+            'state' => 'nullable|string|max:100',
             'zip_code' => 'nullable|string|max:10',
             'emergency_contact_name' => 'nullable|string|max:255',
             'emergency_contact_phone' => 'nullable|string|max:20',
@@ -117,19 +138,27 @@ class PatientController extends Controller
             'allergies' => 'nullable|string',
             'insurance_provider' => 'nullable|string|max:255',
             'insurance_policy_number' => 'nullable|string|max:100',
+            'file_no' => 'nullable|string|max:50',
         ]);
 
         $patient->update($validated);
 
-        return response()->json($patient);
+        return redirect()->back()->with('success', 'Patient updated successfully');
+    } catch (\Exception $e) {
+        return redirect()->back()->with('error', 'Failed to update patient: ' . $e->getMessage());
     }
+}
 
     public function destroy($id)
     {
-        $patient = Patient::findOrFail($id);
-        $patient->delete();
+        try {
+            $patient = Patient::findOrFail($id);
+            $patient->delete();
 
-        return response()->json(['message' => 'Patient deleted successfully']);
+            return redirect()->back()->with('success', 'Patient deleted successfully');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Failed to delete patient: ' . $e->getMessage());
+        }
     }
 
     public function search(Request $request)
@@ -143,7 +172,8 @@ class PatientController extends Controller
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('file_no', 'like', "%{$search}%");
             });
         }
 

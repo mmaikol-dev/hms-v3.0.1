@@ -16,6 +16,7 @@ class Patient extends Model
         'state', 'zip_code', 'emergency_contact_name', 'emergency_contact_phone',
         'emergency_contact_relation', 'medical_history', 'allergies',
         'insurance_provider', 'insurance_policy_number', 'is_active',
+        'file_no','member_no','national_id'
     ];
 
     protected $casts = [

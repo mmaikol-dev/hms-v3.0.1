@@ -114,7 +114,7 @@ class PrescriptionController extends Controller
             'items.medicine'
         ])->findOrFail($id);
 
-        return Inertia::render('Prescriptions/Show', [
+        return Inertia::render('prescriptions/show', [
             'prescription' => $prescription
         ]);
     }
@@ -129,7 +129,7 @@ class PrescriptionController extends Controller
             ->select('id', 'name', 'quantity_in_stock', 'unit_price')
             ->get();
 
-        return Inertia::render('Prescriptions/Edit', [
+        return Inertia::render('prescriptions/edit', [
             'prescription' => $prescription,
             'patients' => $patients,
             'doctors' => $doctors,

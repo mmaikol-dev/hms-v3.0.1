@@ -74,6 +74,11 @@ class LabTestController extends Controller
         ]);
     }
 
+    public function edit($id)
+    {
+        return $this->show($id);
+    }
+
     /**
      * Update the specified lab test in storage.
      */

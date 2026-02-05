@@ -115,6 +115,11 @@ class LabTestRequestController extends Controller
         ]);
     }
 
+    public function edit($id)
+    {
+        return $this->show($id);
+    }
+
     public function generateReport($id)
     {
         $labTestRequest = LabTestRequest::with(['patient', 'doctor', 'labTest'])->findOrFail($id);
@@ -166,7 +171,7 @@ class LabTestRequestController extends Controller
         $labRequest = LabTestRequest::findOrFail($id);
         $labRequest->delete();
 
-        return redirect()->route('labtest-requests.index')
+        return redirect()->route('labtestrequests.index')
             ->with('success', 'Lab test request deleted successfully.');
     }
 

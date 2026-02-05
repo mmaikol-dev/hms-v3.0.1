@@ -84,9 +84,6 @@ const departmentNav = [
         label: "Finance",
         items: [
             { title: 'Transactions', href: '/transactions', icon: HandCoins },
-            { title: 'Reports', href: '/report', icon: FileAxis3DIcon },
-            { title: 'Undelivered Orders', href: '/undelivered', icon: BookmarkXIcon },
-            { title: 'Unremitted Orders', href: '/unremitted', icon: FileX },
             { title: 'STK push', href: '/stk', icon: Smartphone },
         ],
     },

@@ -13,16 +13,16 @@ class VisitController extends Controller
 {
     public function index()
     {
-        return Inertia::render('visits/Index', [
-            'visits' => Visit::with(['patient', 'doctor'])->latest()->paginate(20),
+        return Inertia::render('visits/index', [
+            'visits' => Visit::with(['patient', 'doctor.user'])->latest()->paginate(20),
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('visits/Create', [
+        return Inertia::render('visits/create', [
             'patients' => Patient::select('id', 'first_name', 'last_name')->get(),
-            'doctors' => Doctor::select('id', 'first_name', 'last_name')->get(),
+            'doctors' => Doctor::with('user:id,name')->get(),
             'appointments' => Appointment::select('id', 'appointment_date')->get(),
         ]);
     }
@@ -46,17 +46,17 @@ class VisitController extends Controller
 
     public function show(Visit $visit)
     {
-        return Inertia::render('Visits/Show', [
-            'visit' => $visit->load(['patient', 'doctor', 'appointment']),
+        return Inertia::render('visits/show', [
+            'visit' => $visit->load(['patient', 'doctor.user', 'appointment']),
         ]);
     }
 
     public function edit(Visit $visit)
     {
-        return Inertia::render('visits/Edit', [
+        return Inertia::render('visits/edit', [
             'visit' => $visit,
             'patients' => Patient::select('id', 'first_name', 'last_name')->get(),
-            'doctors' => Doctor::select('id', 'first_name', 'last_name')->get(),
+            'doctors' => Doctor::with('user:id,name')->get(),
             'appointments' => Appointment::select('id', 'appointment_date')->get(),
         ]);
     }

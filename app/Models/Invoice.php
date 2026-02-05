@@ -10,20 +10,20 @@ class Invoice extends Model
     use HasFactory;
 
     protected $fillable = [
-        'invoice_number', 'patient_id', 'invoice_date', 'due_date',
+        'invoice_number', 'patient_id', 'invoice_date', 'due_date', 'file_no', 'member_no',
         'subtotal', 'tax_amount', 'discount_amount', 'total_amount',
         'paid_amount', 'status', 'notes',
     ];
 
-    protected $casts = [
-        'invoice_date' => 'date',
-        'due_date' => 'date',
-        'subtotal' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'discount_amount' => 'decimal:2',
-        'total_amount' => 'decimal:2',
-        'paid_amount' => 'decimal:2',
-    ];
+ protected $casts = [
+    'invoice_date' => 'datetime',  // Changed from 'date'
+    'due_date' => 'datetime',      // Changed from 'date'
+    'subtotal' => 'decimal:2',
+    'tax_amount' => 'decimal:2',
+    'discount_amount' => 'decimal:2',
+    'total_amount' => 'decimal:2',
+    'paid_amount' => 'decimal:2',
+];
 
     public function items()
     {

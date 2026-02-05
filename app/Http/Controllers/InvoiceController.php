@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Invoice;
 use App\Models\Patient;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf; 
 use Illuminate\Support\Facades\DB;
 
 class InvoiceController extends Controller
@@ -20,16 +21,44 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function download($id)
+    {
+        $invoice = Invoice::with(['patient', 'items', 'payments.receivedBy'])
+            ->findOrFail($id);
+
+        $pdf = Pdf::loadView('invoice.invoice', [
+            'invoice' => $invoice,
+            'date' => now()->format('d/m/Y'),
+        ]);
+
+        $filename = 'invoice-' . $invoice->invoice_number . '-' . date('Y-m-d') . '.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    public function view($id)
+    {
+        $invoice = Invoice::with(['patient', 'items', 'payments.receivedBy'])
+            ->findOrFail($id);
+
+        return view('invoice.invoice', [
+            'invoice' => $invoice,
+            'date' => now()->format('d/m/Y'),
+        ]);
+    }
+
     public function create()
     {
-        // Load patients from patients table
-        $patients = Patient::select('id', 'first_name', 'last_name')
+        // Load patients from patients table with file_no and member_no
+        $patients = Patient::select('id', 'first_name', 'last_name', 'file_no', 'member_no')
             ->orderBy('first_name')
             ->get()
             ->map(function ($p) {
                 return [
                     'id' => $p->id,
                     'name' => $p->first_name.' '.$p->last_name,
+                    'file_no' => $p->file_no,
+                    'member_no' => $p->member_no,
                 ];
             });
 
@@ -42,7 +71,9 @@ class InvoiceController extends Controller
     {
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
-            'invoice_date' => 'required|date',
+            'file_no' => 'nullable|string|max:255',
+            'member_no' => 'nullable|string|max:255',
+            'invoice_date' => 'required|date_format:Y-m-d\TH:i',
             'due_date' => 'required|date|after_or_equal:invoice_date',
             'tax_amount' => 'nullable|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
@@ -60,6 +91,8 @@ class InvoiceController extends Controller
             $invoiceData = [
                 'invoice_number' => 'INV'.date('Ymd').str_pad(Invoice::whereDate('created_at', today())->count() + 1, 4, '0', STR_PAD_LEFT),
                 'patient_id' => $validated['patient_id'],
+                'file_no' => $validated['file_no'] ?? null,
+                'member_no' => $validated['member_no'] ?? null,
                 'invoice_date' => $validated['invoice_date'],
                 'due_date' => $validated['due_date'],
                 'tax_amount' => $validated['tax_amount'] ?? 0,
@@ -69,10 +102,11 @@ class InvoiceController extends Controller
                 'paid_amount' => 0,
             ];
 
-            // Calculate subtotal
+            // Calculate subtotal - amount is NOT multiplied by quantity
             $subtotal = 0;
             foreach ($validated['items'] as $item) {
-                $item['amount'] = $item['quantity'] * $item['unit_price'];
+                // The unit_price field contains the total amount for all quantities
+                $item['amount'] = $item['unit_price'];
                 $subtotal += $item['amount'];
             }
 
@@ -81,19 +115,19 @@ class InvoiceController extends Controller
 
             $invoice = Invoice::create($invoiceData);
 
-            // Create invoice items
+            // Create invoice items - amount equals unit_price (no multiplication)
             foreach ($validated['items'] as $item) {
-                $item['amount'] = $item['quantity'] * $item['unit_price'];
+                $item['amount'] = $item['unit_price'];
                 $invoice->items()->create($item);
             }
 
             DB::commit();
 
-            return response()->json($invoice->load(['patient', 'items', 'payments']), 201);
+            return redirect()->route('invoices.index')->with('success', 'Invoice created successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['error' => 'Failed to create invoice: '.$e->getMessage()], 500);
+            return redirect()->back()->with('error', 'Failed to create invoice: ' . $e->getMessage())->withInput();
         }
     }
 
@@ -102,7 +136,14 @@ class InvoiceController extends Controller
         $invoice = Invoice::with(['patient', 'items', 'payments.receivedBy'])
             ->findOrFail($id);
 
-        return response()->json($invoice);
+        return inertia('invoices/show', [
+            'invoice' => $invoice,
+        ]);
+    }
+
+    public function edit($id)
+    {
+        return $this->show($id);
     }
 
     public function update(Request $request, $id)
@@ -111,10 +152,13 @@ class InvoiceController extends Controller
 
         // Only allow updates if invoice is pending
         if ($invoice->status !== 'pending') {
-            return response()->json(['error' => 'Cannot update invoice with status: '.$invoice->status], 400);
+            return redirect()->back()->with('error', 'Cannot update invoice with status: ' . $invoice->status);
         }
 
         $validated = $request->validate([
+            'file_no' => 'nullable|string|max:255',
+            'member_no' => 'nullable|string|max:255',
+            'invoice_date' => 'nullable|date_format:Y-m-d\TH:i',
             'due_date' => 'date|after_or_equal:invoice_date',
             'tax_amount' => 'numeric|min:0',
             'discount_amount' => 'numeric|min:0',
@@ -133,11 +177,11 @@ class InvoiceController extends Controller
             $invoice->update($validated);
             DB::commit();
 
-            return response()->json($invoice->load(['patient', 'items', 'payments']));
+            return redirect()->route('invoices.index')->with('success', 'Invoice updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['error' => 'Failed to update invoice'], 500);
+            return redirect()->back()->with('error', 'Failed to update invoice: ' . $e->getMessage());
         }
     }
 
@@ -147,12 +191,15 @@ class InvoiceController extends Controller
 
         // Only allow deletion if no payments made
         if ($invoice->paid_amount > 0) {
-            return response()->json(['error' => 'Cannot delete invoice with payments'], 400);
+            return redirect()->back()->with('error', 'Cannot delete invoice with payments.');
         }
 
-        $invoice->delete();
-
-        return response()->json(['message' => 'Invoice deleted successfully']);
+        try {
+            $invoice->delete();
+            return redirect()->route('invoices.index')->with('success', 'Invoice deleted successfully.');
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Failed to delete invoice: ' . $e->getMessage());
+        }
     }
 
     public function getPending()
@@ -162,7 +209,9 @@ class InvoiceController extends Controller
             ->orderBy('due_date')
             ->get();
 
-        return response()->json($invoices);
+        return inertia('invoices/pending', [
+            'invoices' => $invoices,
+        ]);
     }
 
     public function getOverdue()
@@ -173,7 +222,9 @@ class InvoiceController extends Controller
             ->orderBy('due_date')
             ->get();
 
-        return response()->json($invoices);
+        return inertia('invoices/overdue', [
+            'invoices' => $invoices,
+        ]);
     }
 
     public function getByPatient($patientId)
@@ -183,6 +234,9 @@ class InvoiceController extends Controller
             ->orderBy('invoice_date', 'desc')
             ->get();
 
-        return response()->json($invoices);
+        return inertia('invoices/patient', [
+            'invoices' => $invoices,
+            'patient' => Patient::findOrFail($patientId),
+        ]);
     }
 }

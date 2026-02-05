@@ -29,15 +29,14 @@ class AttachmentController extends Controller
         $validated = $request->validate([
             'patient_id' => 'required|exists:patients,id',
             'file' => 'required|file|mimes:jpg,png,pdf,docx',
-            'description' => 'nullable|string',
         ]);
 
         $path = $request->file('file')->store('attachments');
 
         Attachment::create([
             'patient_id' => $request->patient_id,
+            'file_name' => $request->file('file')->getClientOriginalName(),
             'file_path'  => $path,
-            'description' => $request->description,
         ]);
 
         return redirect()->route('attachments.index')->with('success', 'Attachment uploaded');
@@ -48,6 +47,37 @@ class AttachmentController extends Controller
         return Inertia::render('attachments/show', [
             'attachment' => $attachment->load('patient')
         ]);
+    }
+
+    public function edit(Attachment $attachment)
+    {
+        return Inertia::render('attachments/edit', [
+            'attachment' => $attachment->load('patient'),
+            'patients' => Patient::select('id', 'first_name', 'last_name')->get(),
+        ]);
+    }
+
+    public function update(Request $request, Attachment $attachment)
+    {
+        $validated = $request->validate([
+            'patient_id' => 'required|exists:patients,id',
+            'file' => 'nullable|file|mimes:jpg,png,pdf,docx',
+        ]);
+
+        $data = [
+            'patient_id' => $validated['patient_id'],
+        ];
+
+        if ($request->hasFile('file')) {
+            Storage::delete($attachment->file_path);
+            $path = $request->file('file')->store('attachments');
+            $data['file_name'] = $request->file('file')->getClientOriginalName();
+            $data['file_path'] = $path;
+        }
+
+        $attachment->update($data);
+
+        return redirect()->route('attachments.show', $attachment)->with('success', 'Attachment updated');
     }
 
     public function destroy(Attachment $attachment)
