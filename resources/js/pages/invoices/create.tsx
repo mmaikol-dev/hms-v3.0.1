@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import AppLayout from "@/layouts/app-layout";
 import { Head, router, usePage } from "@inertiajs/react";
 import { type BreadcrumbItem } from "@/types";
@@ -63,6 +63,8 @@ interface InvoiceItem {
     quantity: number;
     unit_price: number;
     amount: number;
+    source_type?: "prescription_item" | "lab_test_request";
+    source_id?: number;
 }
 
 export default function CreateInvoice() {
@@ -70,6 +72,7 @@ export default function CreateInvoice() {
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     const [processing, setProcessing] = useState(false);
+    const [loadingBillableItems, setLoadingBillableItems] = useState(false);
 
     // Format current date and time for datetime-local input
     const getCurrentDateTime = () => {
@@ -107,7 +110,7 @@ export default function CreateInvoice() {
     ]);
 
     // Handle patient selection and auto-populate file_no and member_no
-    const handlePatientChange = (patientId: string) => {
+    const handlePatientChange = async (patientId: string) => {
         const selectedPatient = patients?.find((p: any) => p.id.toString() === patientId);
 
         setFormData({
@@ -116,6 +119,38 @@ export default function CreateInvoice() {
             file_no: selectedPatient?.file_no || "",
             member_no: selectedPatient?.member_no || "",
         });
+
+        if (!patientId) return;
+
+        setLoadingBillableItems(true);
+        try {
+            const response = await fetch(`/invoices/patient/${patientId}/billable-items`);
+            if (!response.ok) {
+                throw new Error("Failed to load billable items");
+            }
+
+            const data = await response.json();
+            const fetchedItems = (data.items || []) as InvoiceItem[];
+
+            if (fetchedItems.length > 0) {
+                setItems(fetchedItems);
+            } else {
+                setItems([
+                    {
+                        item_type: "consultation",
+                        description: "",
+                        quantity: 1,
+                        unit_price: 0,
+                        amount: 0,
+                    },
+                ]);
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Could not auto-load dispensed prescriptions and completed lab tests.");
+        } finally {
+            setLoadingBillableItems(false);
+        }
     };
 
     const addItem = () => {
@@ -384,6 +419,11 @@ export default function CreateInvoice() {
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {loadingBillableItems && (
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        Loading dispensed prescriptions and completed lab tests...
+                                    </p>
+                                )}
                             </div>
 
                             <div className="space-y-2">

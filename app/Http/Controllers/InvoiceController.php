@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\LabTestRequest;
 use App\Models\Patient;
+use App\Models\PrescriptionItem;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf; 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
@@ -67,6 +71,79 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function getPatientBillableItems($patientId)
+    {
+        $patient = Patient::findOrFail($patientId);
+
+        $prescriptionItems = PrescriptionItem::query()
+            ->select(
+                'prescription_items.id',
+                'prescription_items.quantity',
+                'prescriptions.prescription_number',
+                'medicines.name as medicine_name',
+                'medicines.unit_price as medicine_unit_price'
+            )
+            ->join('prescriptions', 'prescriptions.id', '=', 'prescription_items.prescription_id')
+            ->join('medicines', 'medicines.id', '=', 'prescription_items.medicine_id')
+            ->leftJoin('invoice_items', function ($join) {
+                $join->on('invoice_items.source_id', '=', 'prescription_items.id')
+                    ->where('invoice_items.source_type', '=', 'prescription_item');
+            })
+            ->where('prescriptions.patient_id', $patient->id)
+            ->where('prescriptions.status', 'dispensed')
+            ->whereNull('invoice_items.id')
+            ->orderByDesc('prescription_items.id')
+            ->get()
+            ->map(function ($item) {
+                $amount = (float) $item->medicine_unit_price * (int) $item->quantity;
+
+                return [
+                    'item_type' => 'medicine',
+                    'description' => "Medicine: {$item->medicine_name} ({$item->prescription_number})",
+                    'quantity' => (int) $item->quantity,
+                    'unit_price' => $amount,
+                    'amount' => $amount,
+                    'source_type' => 'prescription_item',
+                    'source_id' => (int) $item->id,
+                ];
+            });
+
+        $labRequests = LabTestRequest::query()
+            ->select(
+                'lab_test_requests.id',
+                'lab_test_requests.request_number',
+                'lab_tests.test_name',
+                'lab_tests.price'
+            )
+            ->join('lab_tests', 'lab_tests.id', '=', 'lab_test_requests.lab_test_id')
+            ->leftJoin('invoice_items', function ($join) {
+                $join->on('invoice_items.source_id', '=', 'lab_test_requests.id')
+                    ->where('invoice_items.source_type', '=', 'lab_test_request');
+            })
+            ->where('lab_test_requests.patient_id', $patient->id)
+            ->where('lab_test_requests.status', 'completed')
+            ->whereNull('invoice_items.id')
+            ->orderByDesc('lab_test_requests.id')
+            ->get()
+            ->map(function ($request) {
+                $amount = (float) $request->price;
+
+                return [
+                    'item_type' => 'lab_test',
+                    'description' => "Lab Test: {$request->test_name} ({$request->request_number})",
+                    'quantity' => 1,
+                    'unit_price' => $amount,
+                    'amount' => $amount,
+                    'source_type' => 'lab_test_request',
+                    'source_id' => (int) $request->id,
+                ];
+            });
+
+        return response()->json([
+            'items' => $prescriptionItems->concat($labRequests)->values(),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -83,6 +160,8 @@ class InvoiceController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.unit_price' => 'required|numeric|min:0',
+            'items.*.source_type' => 'nullable|required_with:items.*.source_id|in:prescription_item,lab_test_request',
+            'items.*.source_id' => 'nullable|required_with:items.*.source_type|integer|min:1',
         ]);
 
         DB::beginTransaction();
@@ -105,6 +184,18 @@ class InvoiceController extends Controller
             // Calculate subtotal - amount is NOT multiplied by quantity
             $subtotal = 0;
             foreach ($validated['items'] as $item) {
+                if (! empty($item['source_type']) && ! empty($item['source_id'])) {
+                    $exists = InvoiceItem::where('source_type', $item['source_type'])
+                        ->where('source_id', $item['source_id'])
+                        ->exists();
+
+                    if ($exists) {
+                        throw ValidationException::withMessages([
+                            'items' => ['Some selected prescription/lab test items were already invoiced. Please refresh and try again.'],
+                        ]);
+                    }
+                }
+
                 // The unit_price field contains the total amount for all quantities
                 $item['amount'] = $item['unit_price'];
                 $subtotal += $item['amount'];
@@ -117,6 +208,28 @@ class InvoiceController extends Controller
 
             // Create invoice items - amount equals unit_price (no multiplication)
             foreach ($validated['items'] as $item) {
+                if (! empty($item['source_type']) && ! empty($item['source_id'])) {
+                    if ($item['source_type'] === 'prescription_item') {
+                        $isValidSource = PrescriptionItem::whereKey($item['source_id'])
+                            ->whereHas('prescription', function ($query) use ($validated) {
+                                $query->where('patient_id', $validated['patient_id'])
+                                    ->where('status', 'dispensed');
+                            })
+                            ->exists();
+                    } else {
+                        $isValidSource = LabTestRequest::whereKey($item['source_id'])
+                            ->where('patient_id', $validated['patient_id'])
+                            ->where('status', 'completed')
+                            ->exists();
+                    }
+
+                    if (! $isValidSource) {
+                        throw ValidationException::withMessages([
+                            'items' => ['Some selected prescription/lab test items are no longer billable for this patient.'],
+                        ]);
+                    }
+                }
+
                 $item['amount'] = $item['unit_price'];
                 $invoice->items()->create($item);
             }
@@ -124,6 +237,10 @@ class InvoiceController extends Controller
             DB::commit();
 
             return redirect()->route('invoices.index')->with('success', 'Invoice created successfully.');
+        } catch (ValidationException $e) {
+            DB::rollBack();
+
+            return redirect()->back()->withErrors($e->errors())->withInput();
         } catch (\Exception $e) {
             DB::rollBack();
 

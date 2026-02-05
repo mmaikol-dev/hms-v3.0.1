@@ -164,9 +164,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('bills', BillController::class);
 
     // invoice
-   Route::resource('invoices', InvoiceController::class);
-Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
-Route::get('invoices/{invoice}/view', [InvoiceController::class, 'view'])->name('invoices.view');
+    Route::get('invoices/patient/{patient}/billable-items', [InvoiceController::class, 'getPatientBillableItems'])
+        ->name('invoices.billable-items');
+    Route::resource('invoices', InvoiceController::class);
+    Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
+    Route::get('invoices/{invoice}/view', [InvoiceController::class, 'view'])->name('invoices.view');
     Route::resource('invoiceitems', InvoiceItemController::class);
 
     // bed

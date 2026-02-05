@@ -40,8 +40,10 @@ class MedicineController extends Controller
             'strength' => 'nullable|string|max:50'
         ]);
 
-        $medicine = Medicine::create($validated);
-        return response()->json($medicine, 201);
+        Medicine::create($validated);
+
+        return redirect()->route('medicines.index')
+            ->with('success', 'Medicine added successfully.');
     }
 
     public function show($id)
@@ -71,14 +73,16 @@ class MedicineController extends Controller
         ]);
 
         $medicine->update($validated);
-        return response()->json($medicine);
+
+        return back()->with('success', 'Medicine updated successfully.');
     }
 
     public function destroy($id)
     {
         $medicine = Medicine::findOrFail($id);
         $medicine->delete();
-        return response()->json(['message' => 'Medicine deleted successfully']);
+
+        return back()->with('success', 'Medicine deleted successfully.');
     }
 
     public function getLowStock()
